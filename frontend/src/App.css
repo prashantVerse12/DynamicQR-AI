@@ -1,0 +1,95 @@
+import { useState } from "react";
+import axios from "axios";
+import { QrCode } from "lucide-react";
+
+function App() {
+
+  const [url, setUrl] = useState("");
+  const [qr, setQr] = useState(null);
+
+
+  const createQR = async () => {
+
+    const response = await axios.post(
+      `http://127.0.0.1:8000/create-qr?content_url=${url}`
+    );
+
+    setQr(response.data);
+
+  };
+
+
+  return (
+
+    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+
+
+      <div className="bg-white shadow-xl rounded-xl p-8 w-[500px]">
+
+
+        <div className="flex items-center gap-2 mb-6">
+
+          <QrCode />
+
+          <h1 className="text-2xl font-bold">
+            Dynamic QR AI
+          </h1>
+
+        </div>
+
+
+        <input
+
+          className="border p-3 w-full rounded"
+
+          placeholder="Enter your link"
+
+          value={url}
+
+          onChange={(e) => setUrl(e.target.value)}
+
+        />
+
+
+        <button
+
+          onClick={createQR}
+
+          className="bg-black text-white w-full mt-4 p-3 rounded"
+
+        >
+
+          Generate QR
+
+        </button>
+
+
+
+        {qr && (
+
+          <div className="mt-5">
+
+            <p>
+              QR ID: {qr.qr_id}
+            </p>
+
+            <p>
+              Link: {qr.qr_link}
+            </p>
+
+          </div>
+
+        )}
+
+
+      </div>
+
+
+    </div>
+
+  );
+
+}
+
+
+export default App;
