@@ -8,6 +8,7 @@ from fastapi.security import (
     HTTPBearer,
     HTTPAuthorizationCredentials
 )
+from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -95,6 +96,7 @@ def create_token(data: dict):
 # -----------------------
 
 security = HTTPBearer()
+optional_security = HTTPBearer(auto_error=False)
 
 
 
@@ -197,5 +199,47 @@ def get_current_user(
         )
 
 
+
+    return user
+
+
+def get_optional_current_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security),
+    db: Session = Depends(get_db)
+):
+    if credentials is None:
+        return None
+
+    token = credentials.credentials
+
+    try:
+        payload = jwt.decode(
+            token,
+            SECRET_KEY,
+            algorithms=[ALGORITHM]
+        )
+        email = payload.get("email")
+        if email is None:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid token"
+            )
+    except JWTError:
+        raise HTTPException(
+            status_code=401,
+            detail="Token invalid"
+        )
+
+    user = (
+        db.query(User)
+        .filter(User.email == email)
+        .first()
+    )
+
+    if user is None:
+        raise HTTPException(
+            status_code=401,
+            detail="User not found"
+        )
 
     return user

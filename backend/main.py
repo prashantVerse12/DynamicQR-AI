@@ -38,7 +38,8 @@ from auth import (
     hash_password,
     verify_password,
     create_token,
-    get_current_user
+    get_current_user,
+    get_optional_current_user
 )
 
 
@@ -268,7 +269,8 @@ def create_qr(
 
     content_url:str,
 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_optional_current_user)
 
 ):
 
@@ -385,7 +387,7 @@ def create_qr(
 
         ai_status=ai_result["status"],
 
-        user_id=None
+        user_id=current_user.id if current_user else None
 
     )
 
@@ -433,7 +435,8 @@ def update_qr(
 
     request: UpdateQRRequest,
 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 
 ):
 
@@ -447,6 +450,12 @@ def update_qr(
         raise HTTPException(
             status_code=404,
             detail="QR not found"
+        )
+
+    if qr.user_id != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to manage this QR code."
         )
 
     destination_url = str(request.destination_url)
@@ -559,7 +568,30 @@ def scan_qr(
     )
 
 
+@app.get("/my-qrs")
+def my_qrs(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    qrs = (
+        db.query(QRCode)
+        .filter(QRCode.user_id == current_user.id)
+        .all()
+    )
 
+    return [
+        {
+            "qr_id": qr.qr_id,
+            "content": qr.content,
+            "scans": qr.scans,
+            "active": qr.active,
+            "risk_score": qr.risk_score,
+            "ai_status": qr.ai_status,
+            "qr_link": f"http://localhost:8000/q/{qr.qr_id}",
+            "qr_image": f"http://localhost:8000/qr-images/{qr.qr_id}.png"
+        }
+        for qr in qrs
+    ]
 
 
 
@@ -574,7 +606,8 @@ def details(
 
     qr_id:str,
 
-    db:Session=Depends(get_db)
+    db:Session=Depends(get_db),
+    current_user: User = Depends(get_current_user)
 
 ):
 
@@ -593,14 +626,16 @@ def details(
 
 
     if not qr:
+        raise HTTPException(
+            status_code=404,
+            detail="QR not found"
+        )
 
-        return {
-
-            "error":
-
-            "Not found"
-
-        }
+    if qr.user_id != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to manage this QR code."
+        )
 
 
 
