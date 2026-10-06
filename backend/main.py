@@ -26,6 +26,12 @@ from models import (
     User
 )
 
+from content import (
+    backfill_legacy_url_content,
+    create_url_content_version,
+    get_current_content,
+)
+
 
 from schemas import (
     UserCreate,
@@ -112,6 +118,17 @@ def get_db():
 
     finally:
         db.close()
+
+
+def migrate_legacy_content():
+    db = SessionLocal()
+    try:
+        backfill_legacy_url_content(db)
+    finally:
+        db.close()
+
+
+migrate_legacy_content()
 
 
 
@@ -392,9 +409,12 @@ def create_qr(
     )
 
 
-
     db.add(qr)
-
+    create_url_content_version(
+        db,
+        qr,
+        content_url
+    )
     db.commit()
 
 
@@ -484,6 +504,11 @@ def update_qr(
             }
         )
 
+    create_url_content_version(
+        db,
+        qr,
+        destination_url
+    )
     qr.content = destination_url
     qr.risk_score = ai_result["risk_score"]
     qr.ai_status = ai_result["status"]
@@ -562,9 +587,7 @@ def scan_qr(
 
 
     return RedirectResponse(
-
-        qr.content
-
+        get_current_content(qr)
     )
 
 
@@ -582,7 +605,7 @@ def my_qrs(
     return [
         {
             "qr_id": qr.qr_id,
-            "content": qr.content,
+            "content": get_current_content(qr),
             "scans": qr.scans,
             "active": qr.active,
             "risk_score": qr.risk_score,
@@ -648,7 +671,7 @@ def details(
 
         "content":
 
-        qr.content,
+        get_current_content(qr),
 
 
         "scans":

@@ -3,7 +3,9 @@ from sqlalchemy import (
     Integer,
     String,
     Boolean,
-    ForeignKey
+    ForeignKey,
+    DateTime,
+    func
 )
 
 from sqlalchemy.orm import relationship
@@ -119,4 +121,62 @@ class QRCode(Base):
     owner = relationship(
         "User",
         back_populates="qr_codes"
+    )
+
+    content_versions = relationship(
+        "ContentVersion",
+        back_populates="qr",
+        cascade="all, delete-orphan",
+        order_by="ContentVersion.version"
+    )
+
+
+class ContentVersion(Base):
+
+    __tablename__ = "content_versions"
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True
+    )
+
+    qr_code_id = Column(
+        Integer,
+        ForeignKey("qr_codes.id"),
+        nullable=False,
+        index=True
+    )
+
+    content_type = Column(
+        String,
+        nullable=False,
+        default="URL"
+    )
+
+    content = Column(
+        String,
+        nullable=False
+    )
+
+    version = Column(
+        Integer,
+        nullable=False
+    )
+
+    is_published = Column(
+        Boolean,
+        nullable=False,
+        default=True
+    )
+
+    created_at = Column(
+        DateTime,
+        nullable=False,
+        server_default=func.now()
+    )
+
+    qr = relationship(
+        "QRCode",
+        back_populates="content_versions"
     )
