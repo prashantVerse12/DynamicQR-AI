@@ -29,7 +29,8 @@ from models import (
 
 from schemas import (
     UserCreate,
-    UserLogin
+    UserLogin,
+    UpdateQRRequest
 )
 
 
@@ -123,67 +124,35 @@ def get_db():
 
 @app.post("/register")
 def register(
-
     user: UserCreate,
-
     db: Session = Depends(get_db)
-
 ):
-
-
     old_user = (
-
         db.query(User)
-
         .filter(
             User.email == user.email
         )
-
         .first()
-
     )
-
 
     if old_user:
-
         raise HTTPException(
-
             status_code=400,
-
             detail="Email already exists"
-
         )
-
-
 
     new_user = User(
-
         email=user.email,
-
-        password=hash_password(
-            user.password
-        )
+        password=hash_password(user.password)
 
     )
 
-
     db.add(new_user)
-
     db.commit()
 
-
-
     return {
-
-        "message":
-
-        "Registered successfully 🚀"
-
+        "message": "Registered successfully 🚀"
     }
-
-
-
-
 
 
 @app.post("/login")
@@ -299,9 +268,7 @@ def create_qr(
 
     content_url:str,
 
-    db: Session = Depends(get_db),
-
-    current_user = Depends(get_current_user)
+    db: Session = Depends(get_db)
 
 ):
 
@@ -418,7 +385,7 @@ def create_qr(
 
         ai_status=ai_result["status"],
 
-        user_id=current_user.id
+        user_id=None
 
     )
 
@@ -435,11 +402,6 @@ def create_qr(
         "message":
 
         "QR created with AI scan 🤖",
-
-
-        "owner":
-
-        current_user.email,
 
 
         "qr_id":
@@ -461,6 +423,69 @@ def create_qr(
 
         ai_result
 
+    }
+
+
+@app.put("/update-qr/{qr_id}")
+def update_qr(
+
+    qr_id: str,
+
+    request: UpdateQRRequest,
+
+    db: Session = Depends(get_db)
+
+):
+
+    qr = (
+        db.query(QRCode)
+        .filter(QRCode.qr_id == qr_id)
+        .first()
+    )
+
+    if not qr:
+        raise HTTPException(
+            status_code=404,
+            detail="QR not found"
+        )
+
+    destination_url = str(request.destination_url)
+
+    try:
+        ai_response = requests.post(
+            "http://127.0.0.1:9000/scan",
+            params={"url": destination_url}
+        )
+
+        ai_result = ai_response.json()
+
+    except Exception:
+        ai_result = {
+            "risk_score": 0,
+            "status": "AI OFFLINE",
+            "reasons": []
+        }
+
+    if "DANGEROUS" in ai_result["status"]:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "Dangerous URL blocked 🚨",
+                "ai_report": ai_result
+            }
+        )
+
+    qr.content = destination_url
+    qr.risk_score = ai_result["risk_score"]
+    qr.ai_status = ai_result["status"]
+    db.commit()
+
+    return {
+        "message": "QR destination updated successfully",
+        "qr_id": qr.qr_id,
+        "destination_url": qr.content,
+        "risk_score": qr.risk_score,
+        "ai_status": qr.ai_status
     }
 
 

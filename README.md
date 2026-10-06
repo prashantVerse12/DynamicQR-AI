@@ -338,6 +338,15 @@ The backend:
 
 The destination can later be changed while keeping the same QR code.
 
+```text
+PUT /update-qr/{qr_id}
+```
+
+Send a JSON body containing `destination_url`. The backend validates the
+destination and re-runs the AI security analysis before updating only the
+stored destination. The QR ID, QR image, dynamic link, scan count, and active
+state remain unchanged. Dangerous destinations are rejected.
+
 ---
 
 ## 🔐 Security Model

@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, HttpUrl
 
 
 # data coming from frontend
@@ -27,3 +27,8 @@ class Token(BaseModel):
     access_token: str
 
     token_type: str
+
+
+class UpdateQRRequest(BaseModel):
+
+    destination_url: HttpUrl
