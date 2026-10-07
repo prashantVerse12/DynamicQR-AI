@@ -1,260 +1,225 @@
-# Dynamic QR AI Platform 🤖🔐
+# DynamicQR-AI
 
-> **An AI-powered dynamic QR infrastructure platform that lets users create, manage, monitor, and secure QR codes with real-time URL risk analysis.**
+DynamicQR-AI is a full-stack dynamic QR platform. It generates QR images that
+point to a stable backend route instead of encoding a final destination
+directly. The published content behind a QR can therefore be changed without
+reprinting the QR image.
 
-[![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
-[![React](https://img.shields.io/badge/React-Frontend-61DAFB?logo=react)](https://react.dev/)
-[![SQLite](https://img.shields.io/badge/Database-SQLite-003B57?logo=sqlite)](https://www.sqlite.org/)
-[![JWT](https://img.shields.io/badge/Auth-JWT-black)](https://jwt.io/)
-[![Status](https://img.shields.io/badge/Status-In%20Development-orange)]()
+The current project combines:
 
----
+- A FastAPI backend for QR generation, resolution, authentication, and QR
+  management.
+- A React/Vite dashboard for registration, login, QR creation, and URL
+  management.
+- A small FastAPI AI engine that assigns heuristic URL risk scores.
+- SQLite and SQLAlchemy for local persistence.
 
-## 🚀 Overview
+This repository is an active development project. The sections below describe
+the behavior that exists in the current source tree, not the broader product
+vision.
 
-Dynamic QR AI is a full-stack QR infrastructure platform designed around one core idea:
+## Current status
 
-> **A QR code should remain useful and controllable even after it has been printed or distributed.**
+### Implemented
 
-Instead of encoding a destination directly into a QR code, the platform creates a **dynamic QR link** that redirects through the backend.
+- Dynamic QR generation with stable eight-character QR IDs.
+- QR image generation and local image serving.
+- Public QR resolution at `GET /q/{qr_id}`.
+- URL, TEXT, and FORM content versions in the backend.
+- URL redirects, plain-text responses, and safe display-only form responses.
+- URL content updates while keeping the same QR ID and image.
+- Versioned content with one published version at a time.
+- Legacy URL fallback from `QRCode.content`.
+- Scan counting.
+- User registration and login.
+- Password hashing with Passlib/bcrypt.
+- JWT-based protected QR management endpoints.
+- Ownership checks for QR management.
+- AI URL risk scoring during URL creation and URL updates.
+- React dashboard with login, registration, QR listing, URL creation, URL
+  updates, scan counts, QR images, and security badges.
 
-This allows the destination URL to be changed later without replacing the physical QR code.
+### Partially implemented
 
-The platform also introduces an **AI security layer** that analyzes URLs and assigns a risk score before they are used by the QR infrastructure.
+- TEXT and FORM are supported by backend creation/update and public
+  resolution, but the React dashboard still presents a URL-oriented management
+  interface.
+- FORM is display-only. It does not submit or store responses.
+- AI analysis is a heuristic scanner, not a production reputation or machine
+  learning service.
+- The application is suitable for local development, not production
+  deployment.
 
----
+### Planned or future
 
-## 🎯 Problem
+The following are not implemented in the current repository:
 
-Traditional QR codes are often static.
+- A multi-content dashboard editor and FORM builder.
+- FORM submissions, response storage, email, webhooks, or external actions.
+- Version history and rollback UI.
+- Scheduled publishing and expiration.
+- Production secrets management, HTTPS deployment, and cloud infrastructure.
+- PostgreSQL, migrations, containerization, and production observability.
+- Rate limiting, CAPTCHA, multi-tenancy, billing, and administrative tooling.
+- Advanced URL reputation and ML-based classification.
 
-Once a QR code is printed:
+## Why dynamic QR codes?
 
-* The destination cannot easily be changed
-* There is limited control over the destination
-* Scan activity is difficult to monitor
-* Malicious or suspicious URLs can potentially be distributed through QR codes
-
-Dynamic QR AI addresses these limitations through:
-
-**Dynamic redirection + authentication + analytics + AI-powered URL security.**
-
----
-
-## ✨ Current Features
-
-### 🔗 Dynamic QR Generation
-
-Create a QR code that points to a controlled backend URL rather than directly to the final destination.
-
-```text
-QR Code
-   ↓
-/q/{qr_id}
-   ↓
-Current destination URL
-```
-
-The destination can be updated without generating a new QR code.
-
----
-
-### 🔄 Dynamic URL Updates
-
-The destination associated with a QR code can be changed through the backend API.
-
-Example:
-
-```text
-Old:
-https://example.com/page1
-
-        ↓ update
-
-New:
-https://example.com/page2
-```
-
-The physical QR code remains unchanged.
-
----
-
-### 📊 Scan Analytics
-
-Each QR scan is tracked by the backend.
-
-Current analytics include:
-
-* QR ID
-* Destination URL
-* Scan count
-* Active/inactive state
-
----
-
-### 🔐 JWT Authentication
-
-The platform includes:
-
-* User registration
-* User login
-* Password hashing
-* JWT authentication
-* Protected QR management endpoints
-
-Authenticated users can manage their QR infrastructure through protected APIs.
-
----
-
-### 🤖 AI URL Security Engine
-
-A separate AI Engine microservice analyzes URLs before QR creation.
-
-The current engine evaluates indicators such as:
-
-* HTTPS usage
-* Suspicious keywords
-* Domain characteristics
-* URL patterns
-
-It produces:
+A static QR normally contains its final URL. Once printed, changing that URL
+requires replacing the QR. DynamicQR-AI instead uses this flow:
 
 ```text
-Risk Score
-Security Status
-Detection Reasons
+Printed QR image
+      |
+      v
+GET /q/{qr_id}
+      |
+      v
+Current published ContentVersion
+      |
+      +--> URL  : HTTP 302 redirect
+      +--> TEXT : text/plain response
+      +--> FORM : safe display-only HTML form
 ```
 
-Example:
+The QR ID and QR image remain stable while the published content version
+changes.
 
-```json
-{
-  "domain": "free-bank-login-gift",
-  "risk_score": 105,
-  "status": "DANGEROUS 🔴",
-  "reasons": [
-    "No HTTPS detected",
-    "Suspicious keyword login",
-    "Suspicious keyword password",
-    "Suspicious keyword bank",
-    "Suspicious keyword free",
-    "Suspicious keyword gift"
-  ]
-}
-```
-
----
-
-## 🏗️ Architecture
-
-The project is organized as a multi-service application:
+## Architecture
 
 ```text
-                         ┌─────────────────────┐
-                         │      React UI       │
-                         │   localhost:5173    │
-                         └──────────┬──────────┘
-                                    │
-                                    ▼
-                         ┌─────────────────────┐
-                         │   FastAPI Backend   │
-                         │   localhost:8000    │
-                         └───────┬───────┬─────┘
-                                 │       │
-                       ┌─────────┘       └──────────┐
-                       ▼                            ▼
-              ┌────────────────┐          ┌─────────────────┐
-              │ SQLite + ORM   │          │   AI Engine     │
-              │   SQLAlchemy   │          │ localhost:9000  │
-              └────────────────┘          └─────────────────┘
+                    +----------------------+
+                    | React/Vite dashboard |
+                    |   localhost:5173     |
+                    +----------+-----------+
+                               |
+                               v
+                    +----------------------+
+                    | FastAPI backend      |
+                    |   localhost:8000     |
+                    +------+-----------+---+
+                           |           |
+                           v           v
+                  +--------------+  +------------------+
+                  | SQLite       |  | AI engine        |
+                  | SQLAlchemy   |  | localhost:9000  |
+                  +--------------+  +------------------+
 ```
 
-### Services
+| Component | Location | Technology | Local port | Responsibility |
+| --- | --- | --- | ---: | --- |
+| Backend | [`backend/`](./backend) | Python, FastAPI, SQLAlchemy | `8000` | API, QR lifecycle, auth, content resolution |
+| Frontend | [`frontend/`](./frontend) | React, Vite, Axios | `5173` | Login, registration, dashboard, URL management |
+| AI engine | [`ai-engine/`](./ai-engine) | Python, FastAPI | `9000` | Heuristic URL risk analysis |
+| Database | `backend/qr_codes.db` | SQLite | - | Users, QR codes, content versions |
 
-| Service   | Technology          |   Port | Purpose                            |
-| --------- | ------------------- | -----: | ---------------------------------- |
-| Frontend  | React + Vite        | `5173` | User interface                     |
-| Backend   | FastAPI             | `8000` | API, QR management, authentication |
-| AI Engine | FastAPI + Python    | `9000` | URL security analysis              |
-| Database  | SQLite + SQLAlchemy |      — | Users and QR data                  |
-
----
-
-## 🛠️ Tech Stack
-
-### Frontend
-
-* React
-* Vite
-* JavaScript
-* Axios
-* React Router
-* Lucide React
-* Tailwind CSS
-
-### Backend
-
-* Python
-* FastAPI
-* Uvicorn
-* SQLAlchemy
-* SQLite
-* Pydantic
-* JWT
-* Passlib
-* bcrypt
-* QRCode
-* Pillow
-* Requests
-
-### AI Engine
-
-* Python
-* FastAPI
-* Scikit-learn
-* tldextract
-* Requests
-* python-dotenv
-
----
-
-## 📁 Project Structure
+## Repository structure
 
 ```text
 DynamicQR-AI/
-│
 ├── ai-engine/
 │   ├── main.py
-│   └── requirements.txt
-│
+│   └── scanner.py
 ├── backend/
 │   ├── auth.py
+│   ├── content.py
 │   ├── database.py
 │   ├── main.py
 │   ├── models.py
 │   ├── schemas.py
 │   ├── requirements.txt
-│   └── qr_codes.db
-│
+│   └── tests/
+│       └── test_content_versions.py
 ├── frontend/
 │   ├── src/
 │   │   ├── api/
 │   │   ├── components/
-│   │   ├── pages/
-│   │   ├── App.jsx
-│   │   └── main.jsx
+│   │   └── pages/
 │   ├── package.json
 │   └── vite.config.js
-│
-├── .gitignore
-├── package-lock.json
-└── requirements.txt
+├── requirements.txt
+└── README.md
 ```
 
----
+## Content versioning
 
-## 🔌 Backend API
+The backend keeps the existing `ContentVersion` table as the versioned
+content source:
+
+| Field | Purpose |
+| --- | --- |
+| `qr_code_id` | Parent QR code |
+| `content_type` | `URL`, `TEXT`, or `FORM` |
+| `content` | URL/text string or serialized FORM JSON |
+| `version` | Per-QR version number |
+| `is_published` | Identifies the current published version |
+| `created_at` | Creation timestamp |
+
+`backend/content.py` provides normalization, validation, version creation,
+published-version lookup, and legacy backfill.
+
+`QRCode.content` remains as a legacy URL compatibility field. If a QR has no
+content version, the public resolver validates that field as an HTTP(S) URL
+and redirects to it. Existing URL QR IDs therefore remain usable.
+
+### URL
+
+URL content is an `http://` or `https://` URL. Other schemes, including
+`javascript:`, `data:`, `file:`, `blob:`, and custom schemes, are rejected.
+URLs are limited to 2,048 characters. URL creation and URL updates continue to
+call the AI engine; a result containing `DANGEROUS` is rejected.
+
+### TEXT
+
+TEXT content is returned literally as:
+
+```text
+Content-Type: text/plain; charset=utf-8
+```
+
+Blank text is rejected and text is limited to 10,000 characters. Text is not
+treated as HTML or JavaScript.
+
+### FORM
+
+FORM content is validated JSON stored in the existing `content` string field.
+The current allowlisted field types are:
+
+- `text`
+- `email`
+- `textarea`
+
+The validator limits forms to 20 fields and 50 KB. It also validates field
+names, labels, required flags, and maximum lengths. Public FORM resolution
+uses backend-generated markup with escaped dynamic values and a restrictive
+Content Security Policy. It is display-only: there is no submission endpoint
+or response storage.
+
+## Authentication and authorization
+
+The backend exposes registration and login endpoints. Login returns a JWT.
+The frontend stores the token locally and sends it in the authorization
+header for management requests.
+
+The following management operations require an authenticated owner:
+
+- `GET /my-qrs`
+- `GET /details/{qr_id}`
+- `PUT /update-qr/{qr_id}`
+
+Public QR scanning at `GET /q/{qr_id}` does not require JWT authentication.
+The create route supports anonymous creation through the optional user
+dependency; authenticated creation associates the QR with the current user.
+
+## Backend API
+
+### Health
+
+```text
+GET /
+```
+
+Returns a simple backend/AI status payload.
 
 ### Authentication
 
@@ -263,252 +228,206 @@ POST /register
 POST /login
 ```
 
-### QR Management
+`/register` accepts an email and password. `/login` returns an access token.
+
+### QR creation
+
+Legacy URL-compatible request:
 
 ```text
-POST /create-qr
-GET  /q/{qr_id}
-PUT  /update-qr/{qr_id}
-GET  /details/{qr_id}
+POST /create-qr?content_url=https://example.com
 ```
 
-### AI Engine
+Generalized JSON content request:
 
-```text
-GET  /
-POST /scan
+```json
+{
+  "content_type": "URL",
+  "content": "https://example.com"
+}
 ```
 
----
+The generalized request also accepts `TEXT` content or a validated `FORM`
+definition. The response includes the QR ID, dynamic link, QR image URL, and
+AI result.
 
-## 🧪 Example Workflow
+### QR update
 
-### 1. Register
+Existing URL clients remain supported:
 
-```text
-POST /register
+```json
+{
+  "destination_url": "https://example.org"
+}
 ```
 
-### 2. Login
+The generalized update shape is:
 
-```text
-POST /login
+```json
+{
+  "content_type": "TEXT",
+  "content": "Welcome"
+}
 ```
 
-Receive a JWT access token.
+FORM content is supplied as a JSON object in `content`. Each successful update
+publishes a new version. URL updates also update the legacy `QRCode.content`
+field and AI status fields.
 
-### 3. Authorize
-
-Use the JWT token to access protected endpoints.
-
-### 4. Create QR
+### Public resolution
 
 ```text
-POST /create-qr
+GET /q/{qr_id}
 ```
 
-Example destination:
+Resolution is public. The backend looks up the QR, checks its active state,
+increments the scan count, selects the published version, and dispatches by
+content type:
+
+- `URL`: HTTP `302` with the URL in the `Location` header.
+- `TEXT`: HTTP `200` with a `text/plain` body.
+- `FORM`: HTTP `200` with escaped, display-only HTML.
+- No version: validated legacy URL redirect.
+- Unknown published type: controlled server error.
+
+### Authenticated QR management
 
 ```text
-https://github.com/prashantVerse12
-```
-
-### 5. AI Analysis
-
-The URL is sent to the AI Engine for security analysis.
-
-### 6. QR Creation
-
-If the URL passes the configured security checks, the backend generates a dynamic QR.
-
-### 7. Scan
-
-```text
-/q/{qr_id}
-```
-
-The backend:
-
-1. Finds the QR
-2. Checks whether it is active
-3. Increments the scan counter
-4. Redirects the user to the current destination
-
-### 8. Update
-
-The destination can later be changed while keeping the same QR code.
-
-```text
+GET /my-qrs
+GET /details/{qr_id}
 PUT /update-qr/{qr_id}
 ```
 
-Send a JSON body containing `destination_url`. The backend validates the
-destination and re-runs the AI security analysis before updating only the
-stored destination. The QR ID, QR image, dynamic link, scan count, and active
-state remain unchanged. Dangerous destinations are rejected.
+Management responses include current content, content type, version, scan
+count, active state, AI status/risk fields, QR link, and QR image where
+applicable.
 
----
-
-## 🔐 Security Model
-
-The current platform uses multiple security layers:
+### AI engine
 
 ```text
-User
- │
- ▼
-JWT Authentication
- │
- ▼
-Protected API
- │
- ▼
-AI URL Analysis
- │
- ├── SAFE 🟢
- ├── SUSPICIOUS 🟡
- └── DANGEROUS 🔴
- │
- ▼
-Dynamic QR Infrastructure
+GET  http://127.0.0.1:9000/
+POST http://127.0.0.1:9000/scan?url=https://example.com
 ```
 
-This architecture is designed to separate:
+The scanner currently checks HTTPS usage, suspicious keywords, and URL length.
+It returns a domain, numeric risk score, status, and reasons. The backend
+uses the result for URL creation and URL updates only. AI scoring is not a
+guarantee that a destination is safe.
 
-* Identity and access control
-* QR infrastructure
-* URL security analysis
+## Local development
 
----
+### Prerequisites
 
-## 📈 Current Development Status
+- Python 3.12 is the tested backend runtime.
+- Node.js and npm.
+- A local SQLite-compatible environment.
 
-### Completed
+### Install backend dependencies
 
-* [x] Project architecture
-* [x] FastAPI backend
-* [x] React/Vite frontend foundation
-* [x] SQLite database
-* [x] SQLAlchemy models
-* [x] Dynamic QR generation
-* [x] Dynamic QR redirection
-* [x] QR destination updates
-* [x] Scan counting
-* [x] QR image serving
-* [x] User registration
-* [x] Password hashing
-* [x] JWT login
-* [x] Protected API endpoints
-* [x] AI Engine microservice
-* [x] URL risk scoring
-* [x] Suspicious URL detection
-* [x] AI security response integration
+From the repository root:
 
-### In Progress
-
-* [ ] Production-ready React SaaS dashboard
-* [ ] Login/Register UI
-* [ ] QR management dashboard
-* [ ] AI security visualization
-* [ ] Advanced analytics
-* [ ] Production deployment
-* [ ] Improved ML-based URL classification
-
----
-
-## 🧠 Engineering Approach
-
-Development follows an iterative engineering workflow:
-
-```text
-Understand
-    ↓
-Implement
-    ↓
-Test
-    ↓
-Document
-    ↓
-Commit
-    ↓
-Continue
+```powershell
+P:\CODING\DynamicQR-AI\backend\venv\Scripts\python.exe -m pip install -r backend\requirements.txt
 ```
 
-Each feature is tested before moving to the next development phase.
+If the existing backend environment is unavailable, create a project-specific
+environment according to your local Python workflow. Do not commit virtual
+environment directories.
 
----
+### Install frontend dependencies
 
-## 🔮 Future Roadmap
+```powershell
+cd frontend
+npm install
+```
 
-### Phase 9 — SaaS Dashboard
+### Start the AI engine
 
-* Modern React dashboard
-* QR management interface
-* AI security cards
-* Risk visualization
-* Analytics dashboard
+From the AI engine directory:
 
-### Phase 10 — Advanced Security Intelligence
+```powershell
+cd ai-engine
+..\backend\venv\Scripts\python.exe -m uvicorn main:app --reload --port 9000
+```
 
-* Better URL feature extraction
-* ML classification
-* Domain reputation signals
-* More sophisticated phishing detection
-* Explainable risk scoring
+### Start the backend
 
-### Phase 11 — Production Infrastructure
+In another terminal:
 
-* PostgreSQL
-* Environment-based secrets
-* Docker
-* Cloud deployment
-* HTTPS
-* Production authentication
-* Monitoring and logging
+```powershell
+cd backend
+.\venv\Scripts\python.exe -m uvicorn main:app --reload --port 8000
+```
 
----
+The backend creates or opens `backend/qr_codes.db` and serves generated QR
+images from its working directory.
 
-## 💡 Why This Project?
+### Start the frontend
 
-Dynamic QR AI combines several real-world engineering concepts in one system:
+In another terminal:
 
-**Full-Stack Development**
+```powershell
+cd frontend
+npm run dev
+```
 
-React + FastAPI
+Open the Vite URL shown by the command, normally
+`http://localhost:5173`.
 
-**Backend Engineering**
+## Validation commands
 
-REST APIs + database + authentication
+Backend tests:
 
-**Cybersecurity**
+```powershell
+cd backend
+..\backend\venv\Scripts\python.exe -m pytest
+```
 
-JWT + URL threat detection + phishing indicators
+Backend syntax compilation:
 
-**AI/ML**
+```powershell
+cd backend
+.\venv\Scripts\python.exe -m compileall .
+```
 
-Risk scoring and URL classification
+Frontend lint and build:
 
-**Microservices**
+```powershell
+cd frontend
+npm run lint
+npm run build
+```
 
-Independent AI security service
+## Development history
 
-This makes the project a practical demonstration of building and integrating multiple production-oriented software components.
+The current Git history records these major milestones:
 
----
+| Commit | Verified capability |
+| --- | --- |
+| `7b2295f` | Dynamic QR destination update foundation |
+| `120edd7` | Frontend integration for dynamic QR updates |
+| `f14577a` | QR ownership and authenticated management |
+| `742ea26` | Frontend authentication and QR dashboard |
+| `33f3436` | ContentVersion foundation and URL versioning |
+| `8204539` | Multi-content public resolution |
 
-## 👨‍💻 Author
+These milestones describe repository history; the source tree remains the
+authoritative definition of current behavior.
 
-**Prashant Kumar**
+## Security boundaries
 
-B.Tech — Computer Science & Engineering
-Cyber Security
+Implemented safeguards include URL scheme validation, URL length validation,
+AI URL scanning, plain-text TEXT responses, FORM field allowlisting, escaped
+FORM values, and a FORM response CSP.
 
-GitHub: [@prashantVerse12](https://github.com/prashantVerse12)
+The project is not yet a production security system. It does not currently
+provide rate limiting, a managed secret store, HTTPS deployment, advanced
+reputation feeds, submission abuse controls, or a production deployment
+configuration. The JWT secret and local service configuration should be
+externalized before deployment.
 
----
+## License and author
 
-## ⭐ Project Status
-
-**Active Development 🚧**
-
-The core dynamic QR infrastructure, authentication system, database layer, and AI URL security engine are implemented. The project is currently being evolved into a complete AI-powered SaaS dashboard.
+The repository currently identifies **Prashant Kumar** as the author. Consult
+the repository and GitHub project settings for the applicable license and
+contribution terms.
