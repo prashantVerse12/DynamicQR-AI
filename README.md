@@ -9,8 +9,8 @@ The current project combines:
 
 - A FastAPI backend for QR generation, resolution, authentication, and QR
   management.
-- A React/Vite dashboard for registration, login, QR creation, and URL
-  management.
+- A React/Vite dashboard for registration, login, QR creation, and
+  URL/TEXT/FORM management.
 - A small FastAPI AI engine that assigns heuristic URL risk scores.
 - SQLite and SQLAlchemy for local persistence.
 
@@ -36,14 +36,14 @@ vision.
 - JWT-based protected QR management endpoints.
 - Ownership checks for QR management.
 - AI URL risk scoring during URL creation and URL updates.
-- React dashboard with login, registration, QR listing, URL creation, URL
-  updates, scan counts, QR images, and security badges.
+- React dashboard with login, registration, QR listing, URL/TEXT/FORM
+  creation and editing, scan counts, QR images, version information, and
+  security badges.
+- Multi-content dashboard integration from Phase 10D, including a structured
+  FORM definition editor.
 
 ### Partially implemented
 
-- TEXT and FORM are supported by backend creation/update and public
-  resolution, but the React dashboard still presents a URL-oriented management
-  interface.
 - FORM is display-only. It does not submit or store responses.
 - AI analysis is a heuristic scanner, not a production reputation or machine
   learning service.
@@ -54,7 +54,8 @@ vision.
 
 The following are not implemented in the current repository:
 
-- A multi-content dashboard editor and FORM builder.
+- Public MVP deployment and real-user testing.
+- Content preview and further dashboard UX refinement.
 - FORM submissions, response storage, email, webhooks, or external actions.
 - Version history and rollback UI.
 - Scheduled publishing and expiration.
@@ -62,6 +63,8 @@ The following are not implemented in the current repository:
 - PostgreSQL, migrations, containerization, and production observability.
 - Rate limiting, CAPTCHA, multi-tenancy, billing, and administrative tooling.
 - Advanced URL reputation and ML-based classification.
+- Additional content types such as image, poster, PDF, and video.
+- Future access-control modes such as private or verified QR codes.
 
 ## Why dynamic QR codes?
 
@@ -109,7 +112,7 @@ changes.
 | Component | Location | Technology | Local port | Responsibility |
 | --- | --- | --- | ---: | --- |
 | Backend | [`backend/`](./backend) | Python, FastAPI, SQLAlchemy | `8000` | API, QR lifecycle, auth, content resolution |
-| Frontend | [`frontend/`](./frontend) | React, Vite, Axios | `5173` | Login, registration, dashboard, URL management |
+| Frontend | [`frontend/`](./frontend) | React, Vite, Axios | `5173` | Login, registration, dashboard, URL/TEXT/FORM management |
 | AI engine | [`ai-engine/`](./ai-engine) | Python, FastAPI | `9000` | Heuristic URL risk analysis |
 | Database | `backend/qr_codes.db` | SQLite | - | Users, QR codes, content versions |
 
@@ -133,7 +136,12 @@ DynamicQR-AI/
 ├── frontend/
 │   ├── src/
 │   │   ├── api/
+│   │   │   └── api.js
 │   │   ├── components/
+│   │   │   ├── ContentEditor.jsx
+│   │   │   ├── FormDefinitionEditor.jsx
+│   │   │   ├── QRCard.jsx
+│   │   │   └── formDefinitionUtils.js
 │   │   └── pages/
 │   ├── package.json
 │   └── vite.config.js
@@ -157,6 +165,41 @@ content source:
 
 `backend/content.py` provides normalization, validation, version creation,
 published-version lookup, and legacy backfill.
+
+Phase 10D made these backend capabilities usable from the React dashboard
+without changing the backend API or data model. The dashboard now selects
+`URL`, `TEXT`, or `FORM` content during creation and editing, displays the
+current content type and version when available, and preserves the existing
+authentication, ownership, loading, error, refresh, QR image, scan, and
+security-badge behavior.
+
+### Phase 10D — Multi-Content Dashboard Integration
+
+Phase 10D is complete in commit `1ac3358`. The implemented frontend changes
+are:
+
+- [`frontend/src/api/api.js`](./frontend/src/api/api.js): generalized create
+  and update payload support for `URL`, `TEXT`, and `FORM`, while preserving
+  the legacy URL helper behavior.
+- [`frontend/src/pages/Dashboard.jsx`](./frontend/src/pages/Dashboard.jsx):
+  URL/TEXT/FORM selection and content-aware QR creation, with existing
+  authentication, loading, error, and list-refresh behavior preserved.
+- [`frontend/src/components/QRCard.jsx`](./frontend/src/components/QRCard.jsx):
+  content type display, version information with an unavailable fallback,
+  type-aware editing, defensive FORM parsing, and preservation of existing
+  QR, security, scan, image, and public-link information.
+- [`frontend/src/components/ContentEditor.jsx`](./frontend/src/components/ContentEditor.jsx):
+  shared URL/TEXT/FORM content editor.
+- [`frontend/src/components/FormDefinitionEditor.jsx`](./frontend/src/components/FormDefinitionEditor.jsx):
+  structured FORM editor for title, submit label, field name, field label,
+  field type, required state, maximum length, and adding or removing fields.
+- [`frontend/src/components/formDefinitionUtils.js`](./frontend/src/components/formDefinitionUtils.js):
+  shared FORM utilities including `DEFAULT_FIELD`, `createDefaultForm`, and
+  `parseFormContent`.
+
+The existing URL workflow remains supported. Legacy URL create/update helpers,
+existing QR IDs, authentication, ownership behavior, and dashboard flows
+remain intact. The backend API was not changed during Phase 10D.
 
 `QRCode.content` remains as a legacy URL compatibility field. If a QR has no
 content version, the public resolver validates that field as an HTTP(S) URL
@@ -410,9 +453,20 @@ The current Git history records these major milestones:
 | `742ea26` | Frontend authentication and QR dashboard |
 | `33f3436` | ContentVersion foundation and URL versioning |
 | `8204539` | Multi-content public resolution |
+| `bfd3418` | Project architecture and development roadmap documentation |
+| `1ac3358` | Multi-content dashboard support for URL/TEXT/FORM |
 
 These milestones describe repository history; the source tree remains the
-authoritative definition of current behavior.
+authoritative definition of current behavior. Phase 10D is complete. Its
+frontend validation was recorded as:
+
+- `npm run lint` — PASS, 0 errors
+- `npm run build` — PASS
+- `python -m pytest` — PASS, 10 tests passed
+- `git diff --check` — PASS
+
+Commit `1ac3358` was pushed successfully to `origin/master`. No manual browser
+testing or production deployment is claimed by this documentation.
 
 ## Security boundaries
 
@@ -425,6 +479,19 @@ provide rate limiting, a managed secret store, HTTPS deployment, advanced
 reputation feeds, submission abuse controls, or a production deployment
 configuration. The JWT secret and local service configuration should be
 externalized before deployment.
+
+The Phase 10D dashboard security boundary is intentionally limited:
+
+- FORM fields are limited to `text`, `email`, and `textarea`, with a maximum
+  of 20 fields.
+- The frontend mirrors the backend's content and FORM constraints for user
+  feedback, but the backend remains authoritative for validation and security.
+- The dashboard does not accept or render arbitrary HTML, JavaScript, CSS,
+  iframe content, or arbitrary FORM action URLs.
+- The frontend does not use `dangerouslySetInnerHTML` and does not fetch
+  arbitrary destination URLs for previews.
+- Existing URL AI security behavior remains unchanged and continues through
+  the backend.
 
 ## License and author
 
