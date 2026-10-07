@@ -1,4 +1,6 @@
-from pydantic import BaseModel, HttpUrl
+from typing import Any, Literal
+
+from pydantic import BaseModel, HttpUrl, field_validator
 
 
 # data coming from frontend
@@ -29,6 +31,22 @@ class Token(BaseModel):
     token_type: str
 
 
-class UpdateQRRequest(BaseModel):
+ContentType = Literal["URL", "TEXT", "FORM"]
 
-    destination_url: HttpUrl
+
+class QRContentRequest(BaseModel):
+    content_type: ContentType
+    content: str | dict[str, Any]
+
+
+class UpdateQRRequest(BaseModel):
+    destination_url: HttpUrl | None = None
+    content_type: ContentType | None = None
+    content: str | dict[str, Any] | None = None
+
+    @field_validator("content")
+    @classmethod
+    def reject_empty_content(cls, value):
+        if value == "" or value is None:
+            raise ValueError("content must not be empty")
+        return value

@@ -5,6 +5,7 @@ from fastapi import (
 )
 
 from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -13,6 +14,8 @@ from sqlalchemy.orm import Session
 import uuid
 import qrcode
 import requests
+import html
+import json
 
 
 from database import (
@@ -29,13 +32,17 @@ from models import (
 from content import (
     backfill_legacy_url_content,
     create_url_content_version,
+    create_content_version,
     get_current_content,
+    get_current_version,
+    normalize_content,
 )
 
 
 from schemas import (
     UserCreate,
     UserLogin,
+    QRContentRequest,
     UpdateQRRequest
 )
 
@@ -284,7 +291,8 @@ def home():
 @app.post("/create-qr")
 def create_qr(
 
-    content_url:str,
+    content_url: str | None = None,
+    request: QRContentRequest | None = None,
 
     db: Session = Depends(get_db),
     current_user: User = Depends(get_optional_current_user)
@@ -292,44 +300,48 @@ def create_qr(
 ):
 
 
+    if request is not None:
+        content_type = request.content_type
+        raw_content = request.content
+    else:
+        if not content_url:
+            raise HTTPException(status_code=422, detail="content_url is required")
+        content_type = "URL"
+        raw_content = content_url
+
+    try:
+        normalized_content = normalize_content(content_type, raw_content)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    if content_type == "URL":
+        content_url = normalized_content
+    else:
+        content_url = ""
+
     # --------------------
     # AI ENGINE CALL
     # --------------------
 
 
-    try:
-
-
-        ai_response = requests.post(
-
-            "http://127.0.0.1:9000/scan",
-
-            params={
-
-                "url":
-
-                content_url
-
+    if content_type == "URL":
+        try:
+            ai_response = requests.post(
+                "http://127.0.0.1:9000/scan",
+                params={"url": content_url}
+            )
+            ai_result = ai_response.json()
+        except Exception:
+            ai_result = {
+                "risk_score": 0,
+                "status": "AI OFFLINE",
+                "reasons": []
             }
-
-        )
-
-
-        ai_result = ai_response.json()
-
-
-
-    except Exception:
-
-
+    else:
         ai_result = {
-
-            "risk_score":0,
-
-            "status":"AI OFFLINE",
-
-            "reasons":[]
-
+            "risk_score": 0,
+            "status": "NOT_APPLICABLE",
+            "reasons": []
         }
 
 
@@ -337,7 +349,7 @@ def create_qr(
     # BLOCK BAD URL
 
 
-    if "DANGEROUS" in ai_result["status"]:
+    if content_type == "URL" and "DANGEROUS" in ai_result["status"]:
 
 
         raise HTTPException(
@@ -394,7 +406,7 @@ def create_qr(
 
         qr_id=qr_id,
 
-        content=content_url,
+        content=normalized_content,
 
         active=True,
 
@@ -410,11 +422,7 @@ def create_qr(
 
 
     db.add(qr)
-    create_url_content_version(
-        db,
-        qr,
-        content_url
-    )
+    create_content_version(db, qr, content_type, normalized_content)
     db.commit()
 
 
@@ -478,24 +486,43 @@ def update_qr(
             detail="You do not have permission to manage this QR code."
         )
 
-    destination_url = str(request.destination_url)
+    if request.destination_url is not None:
+        content_type = "URL"
+        raw_content = str(request.destination_url)
+    elif request.content_type is not None and request.content is not None:
+        content_type = request.content_type
+        raw_content = request.content
+    else:
+        raise HTTPException(status_code=422, detail="Provide destination_url or content_type and content")
 
     try:
-        ai_response = requests.post(
-            "http://127.0.0.1:9000/scan",
-            params={"url": destination_url}
-        )
+        normalized_content = normalize_content(content_type, raw_content)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-        ai_result = ai_response.json()
+    destination_url = normalized_content
 
-    except Exception:
+    if content_type == "URL":
+        try:
+            ai_response = requests.post(
+                "http://127.0.0.1:9000/scan",
+                params={"url": destination_url}
+            )
+            ai_result = ai_response.json()
+        except Exception:
+            ai_result = {
+                "risk_score": 0,
+                "status": "AI OFFLINE",
+                "reasons": []
+            }
+    else:
         ai_result = {
-            "risk_score": 0,
-            "status": "AI OFFLINE",
+            "risk_score": qr.risk_score,
+            "status": qr.ai_status,
             "reasons": []
         }
 
-    if "DANGEROUS" in ai_result["status"]:
+    if content_type == "URL" and "DANGEROUS" in ai_result["status"]:
         raise HTTPException(
             status_code=400,
             detail={
@@ -504,20 +531,19 @@ def update_qr(
             }
         )
 
-    create_url_content_version(
-        db,
-        qr,
-        destination_url
-    )
-    qr.content = destination_url
-    qr.risk_score = ai_result["risk_score"]
-    qr.ai_status = ai_result["status"]
+    create_content_version(db, qr, content_type, normalized_content)
+    if content_type == "URL":
+        qr.content = normalized_content
+        qr.risk_score = ai_result["risk_score"]
+        qr.ai_status = ai_result["status"]
     db.commit()
 
     return {
         "message": "QR destination updated successfully",
         "qr_id": qr.qr_id,
-        "destination_url": qr.content,
+        "content_type": content_type,
+        "content": normalized_content,
+        "destination_url": qr.content if content_type == "URL" else None,
         "risk_score": qr.risk_score,
         "ai_status": qr.ai_status
     }
@@ -581,14 +607,62 @@ def scan_qr(
 
 
     qr.scans += 1
-
     db.commit()
 
-
-
-    return RedirectResponse(
-        get_current_content(qr)
+    current = next(
+        (
+            version
+            for version in qr.content_versions
+            if version.is_published
+        ),
+        None,
     )
+    if current is None:
+        try:
+            return RedirectResponse(normalize_content("URL", qr.content), status_code=302)
+        except ValueError as exc:
+            raise HTTPException(status_code=500, detail="Legacy QR content is invalid") from exc
+
+    if current.content_type == "URL":
+        return RedirectResponse(current.content, status_code=302)
+    if current.content_type == "TEXT":
+        return PlainTextResponse(current.content)
+    if current.content_type == "FORM":
+        form = json.loads(current.content)
+        fields = []
+        for field in form["fields"]:
+            required = " required" if field["required"] else ""
+            input_type = "textarea" if field["type"] == "textarea" else "input"
+            if input_type == "textarea":
+                control = (
+                    f'<textarea name="{html.escape(field["name"], quote=True)}"'
+                    f' maxlength="{field["max_length"]}"{required}></textarea>'
+                )
+            else:
+                control = (
+                    f'<input type="{html.escape(field["type"], quote=True)}"'
+                    f' name="{html.escape(field["name"], quote=True)}"'
+                    f' maxlength="{field["max_length"]}"{required}>'
+                )
+            fields.append(
+                f'<label>{html.escape(field["label"])}{control}</label>'
+            )
+        body = (
+            "<!doctype html><html><head><meta charset=\"utf-8\">"
+            f"<title>{html.escape(form.get('title', 'Form'))}</title></head><body>"
+            f"<h1>{html.escape(form.get('title', 'Form'))}</h1>"
+            f"<form method=\"post\">{''.join(fields)}"
+            f"<button type=\"submit\">{html.escape(form.get('submit_label', 'Submit'))}</button>"
+            "</form></body></html>"
+        )
+        return HTMLResponse(
+            body,
+            headers={
+                "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'"
+            },
+        )
+
+    raise HTTPException(status_code=500, detail="Unsupported published content type")
 
 
 @app.get("/my-qrs")
@@ -606,6 +680,8 @@ def my_qrs(
         {
             "qr_id": qr.qr_id,
             "content": get_current_content(qr),
+            "content_type": get_current_version(qr).content_type if get_current_version(qr) else "URL",
+            "version": get_current_version(qr).version if get_current_version(qr) else None,
             "scans": qr.scans,
             "active": qr.active,
             "risk_score": qr.risk_score,
@@ -662,6 +738,8 @@ def details(
 
 
 
+    current_version = get_current_version(qr)
+
     return {
 
         "qr_id":
@@ -669,9 +747,9 @@ def details(
         qr.qr_id,
 
 
-        "content":
-
-        get_current_content(qr),
+        "content_type": current_version.content_type if current_version else "URL",
+        "content": get_current_content(qr),
+        "version": current_version.version if current_version else None,
 
 
         "scans":
