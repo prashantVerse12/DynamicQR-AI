@@ -43,17 +43,33 @@ export const loginUser = (email, password) =>
 
 export const logout = () => clearToken();
 
-export const createQr = (contentUrl) =>
-  api.post("/create-qr", null, {
-    params: { content_url: contentUrl },
+export const createQr = (content) => {
+  if (typeof content === "string") {
+    return api.post("/create-qr", null, {
+      params: { content_url: content },
+    });
+  }
+
+  return api.post("/create-qr", {
+    content_type: content.contentType,
+    content: content.content,
   });
+};
 
 export const getMyQrs = () => api.get("/my-qrs");
 
-export const updateQr = (qrId, destinationUrl) =>
-  api.put(`/update-qr/${encodeURIComponent(qrId)}`, {
-    destination_url: destinationUrl,
+export const updateQr = (qrId, content) => {
+  if (typeof content === "string") {
+    return api.put(`/update-qr/${encodeURIComponent(qrId)}`, {
+      destination_url: content,
+    });
+  }
+
+  return api.put(`/update-qr/${encodeURIComponent(qrId)}`, {
+    content_type: content.contentType,
+    content: content.content,
   });
+};
 
 export const getQrDetails = (qrId) =>
   api.get(`/details/${encodeURIComponent(qrId)}`);

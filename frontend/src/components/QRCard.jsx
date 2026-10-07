@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { getQrDetails, updateQr } from "../api/api";
+import ContentEditor from "./ContentEditor";
+import { createDefaultForm, parseFormContent } from "./formDefinitionUtils";
 import SecurityBadge from "./SecurityBadge";
 
 function getErrorMessage(error, fallback) {
@@ -10,12 +12,16 @@ function getErrorMessage(error, fallback) {
     return reasons?.length ? `${detail.message} ${reasons.join(". ")}.` : detail.message;
   }
   if (!error.response) return "Backend unavailable. Make sure the FastAPI server is running on port 8000.";
-  if (error.response.status === 422) return "Enter a valid HTTP or HTTPS URL.";
+  if (error.response.status === 422) return "The content did not pass backend validation.";
   return fallback;
 }
 
 function QRCard({ qr, onChanged }) {
-  const [destination, setDestination] = useState(qr.content);
+  const initialType = qr.content_type || "URL";
+  const [contentType, setContentType] = useState(initialType);
+  const [content, setContent] = useState(
+    initialType === "FORM" ? parseFormContent(qr.content) || createDefaultForm() : qr.content || "",
+  );
   const [details, setDetails] = useState(qr);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -27,7 +33,11 @@ function QRCard({ qr, onChanged }) {
     try {
       const response = await getQrDetails(qr.qr_id);
       setDetails(response.data);
-      setDestination(response.data.content);
+      const nextType = response.data.content_type || "URL";
+      setContentType(nextType);
+      setContent(nextType === "FORM"
+        ? parseFormContent(response.data.content)
+        : response.data.content || "");
       onChanged?.(response.data);
     } catch (requestError) {
       setError(getErrorMessage(requestError, "Could not load QR details."));
@@ -36,17 +46,18 @@ function QRCard({ qr, onChanged }) {
     }
   };
 
-  const updateDestination = async (event) => {
+  const updateContent = async (event) => {
     event.preventDefault();
     setError("");
     setMessage("");
     setLoading("update");
     try {
-      const response = await updateQr(qr.qr_id, destination);
+      const response = await updateQr(qr.qr_id, { contentType, content });
       const updated = {
         ...details,
         ...response.data,
-        content: response.data.destination_url,
+        content: response.data.content,
+        content_type: response.data.content_type || contentType,
       };
       setDetails(updated);
       setMessage("Update successful.");
@@ -70,21 +81,27 @@ function QRCard({ qr, onChanged }) {
         </span>
       </div>
       {qr.qr_image && <img src={qr.qr_image} alt={`QR code ${qr.qr_id}`} className="w-40 border p-2 mx-auto mt-4" />}
-      <p className="mt-4 break-words"><b>Destination:</b> {details.content}</p>
+      <p className="mt-4 break-words"><b>Content type:</b> {details.content_type || "URL"}</p>
+      <p className="break-words"><b>Version:</b> {details.version ?? "Version unavailable"}</p>
+      <p className="break-words">
+        <b>{(details.content_type || "URL") === "URL" ? "Destination" : (details.content_type || "URL") === "TEXT" ? "Text content" : "Form definition"}:</b>{" "}
+        {(details.content_type || "URL") === "FORM"
+          ? (parseFormContent(details.content) ? "Structured form" : "Malformed form definition")
+          : details.content}
+      </p>
       <p><b>Scans:</b> {details.scans ?? 0}</p>
       <a href={qr.qr_link} target="_blank" rel="noreferrer" className="text-blue-600 underline break-all">
         Open dynamic QR link
       </a>
-      <form onSubmit={updateDestination} className="mt-4">
-        <label className="font-semibold">
-          Update destination
-          <input
-            className="border p-3 w-full rounded mt-2"
-            value={destination}
-            onChange={(event) => setDestination(event.target.value)}
-          />
-        </label>
-        <button type="submit" disabled={!destination.trim() || loading !== ""} className="bg-green-600 text-white p-3 w-full mt-3 rounded disabled:opacity-50">
+      <form onSubmit={updateContent} className="mt-4">
+        <ContentEditor
+          contentType={contentType}
+          content={content}
+          onTypeChange={setContentType}
+          onContentChange={setContent}
+          disabled={loading !== ""}
+        />
+        <button type="submit" disabled={loading !== ""} className="bg-green-600 text-white p-3 w-full mt-3 rounded disabled:opacity-50">
           {loading === "update" ? "Updating..." : "Update Same QR"}
         </button>
       </form>

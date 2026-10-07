@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createQr, getMyQrs, logout } from "../api/api";
+import ContentEditor from "../components/ContentEditor";
+import { createDefaultForm } from "../components/formDefinitionUtils";
 import QRCard from "../components/QRCard";
 
 function getErrorMessage(error, fallback) {
@@ -11,7 +13,8 @@ function getErrorMessage(error, fallback) {
 function Dashboard() {
   const navigate = useNavigate();
   const [qrs, setQrs] = useState([]);
-  const [url, setUrl] = useState("");
+  const [contentType, setContentType] = useState("URL");
+  const [content, setContent] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState("");
 
@@ -41,8 +44,8 @@ function Dashboard() {
     setError("");
     setLoading("create");
     try {
-      await createQr(url);
-      setUrl("");
+      await createQr({ contentType, content });
+      setContent(contentType === "FORM" ? createDefaultForm() : "");
       await loadQrs();
     } catch (requestError) {
       setError(getErrorMessage(requestError, "QR creation failed."));
@@ -69,14 +72,13 @@ function Dashboard() {
       <main className="max-w-6xl mx-auto">
         <form onSubmit={createQR} className="bg-white shadow-xl rounded-xl p-5 mb-6">
           <h2 className="font-bold text-xl">Create QR</h2>
-          <div className="flex gap-3 mt-3 flex-col sm:flex-row">
-            <input
-              required
-              type="url"
-              placeholder="Enter destination URL"
-              className="border p-3 rounded flex-1"
-              value={url}
-              onChange={(event) => setUrl(event.target.value)}
+          <div className="mt-3">
+            <ContentEditor
+              contentType={contentType}
+              content={content}
+              onTypeChange={setContentType}
+              onContentChange={setContent}
+              disabled={loading !== ""}
             />
             <button type="submit" disabled={loading !== ""} className="bg-black text-white px-5 py-3 rounded disabled:opacity-50">
               {loading === "create" ? "Creating..." : "Generate QR"}
