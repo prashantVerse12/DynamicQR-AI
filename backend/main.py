@@ -54,6 +54,7 @@ from auth import (
     get_current_user,
     get_optional_current_user
 )
+from config import AI_ENGINE_URL, CORS_ORIGINS, PUBLIC_BASE_URL
 
 
 # -------------------------
@@ -80,9 +81,7 @@ app.add_middleware(
 
     CORSMiddleware,
 
-    allow_origins=[
-        "http://localhost:5173"
-    ],
+    allow_origins=CORS_ORIGINS,
 
     allow_credentials=True,
 
@@ -278,6 +277,11 @@ def home():
     }
 
 
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
 
 
 
@@ -327,7 +331,7 @@ def create_qr(
     if content_type == "URL":
         try:
             ai_response = requests.post(
-                "http://127.0.0.1:9000/scan",
+                f"{AI_ENGINE_URL}/scan",
                 params={"url": content_url}
             )
             ai_result = ai_response.json()
@@ -382,7 +386,7 @@ def create_qr(
 
     qr_link = (
 
-        f"http://localhost:8000/q/{qr_id}"
+        f"{PUBLIC_BASE_URL}/q/{qr_id}"
 
     )
 
@@ -446,7 +450,7 @@ def create_qr(
 
         "qr_image":
 
-        f"http://localhost:8000/qr-images/{qr_id}.png",
+        f"{PUBLIC_BASE_URL}/qr-images/{qr_id}.png",
 
 
         "AI":
@@ -505,7 +509,7 @@ def update_qr(
     if content_type == "URL":
         try:
             ai_response = requests.post(
-                "http://127.0.0.1:9000/scan",
+                f"{AI_ENGINE_URL}/scan",
                 params={"url": destination_url}
             )
             ai_result = ai_response.json()
@@ -686,8 +690,8 @@ def my_qrs(
             "active": qr.active,
             "risk_score": qr.risk_score,
             "ai_status": qr.ai_status,
-            "qr_link": f"http://localhost:8000/q/{qr.qr_id}",
-            "qr_image": f"http://localhost:8000/qr-images/{qr.qr_id}.png"
+            "qr_link": f"{PUBLIC_BASE_URL}/q/{qr.qr_id}",
+            "qr_image": f"{PUBLIC_BASE_URL}/qr-images/{qr.qr_id}.png"
         }
         for qr in qrs
     ]
@@ -774,6 +778,6 @@ def details(
 
         "qr_image":
 
-        f"http://localhost:8000/qr-images/{qr.qr_id}.png"
+        f"{PUBLIC_BASE_URL}/qr-images/{qr.qr_id}.png"
 
     }

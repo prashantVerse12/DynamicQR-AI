@@ -357,6 +357,63 @@ It returns a domain, numeric risk score, status, and reasons. The backend
 uses the result for URL creation and URL updates only. AI scoring is not a
 guarantee that a destination is safe.
 
+## Environment configuration
+
+Deployment-specific settings are read from environment variables. No
+production secrets or Render service URLs are committed to this repository.
+
+### Backend variables
+
+| Variable | Local development value | Purpose |
+| --- | --- | --- |
+| `ENVIRONMENT` | `development` | Runtime environment; production enables JWT secret validation |
+| `DATABASE_URL` | `sqlite:///./qr_codes.db` | SQLAlchemy database connection URL |
+| `JWT_SECRET` | Development-only fallback | JWT signing secret; set a strong secret in Render |
+| `AI_ENGINE_URL` | `http://127.0.0.1:9000` | AI engine base URL |
+| `CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | Comma-separated allowed frontend origins |
+| `PUBLIC_BASE_URL` | `http://localhost:8000` | Public backend URL used in generated QR links and image URLs |
+
+For local development, `ENVIRONMENT=development` (the default) allows the
+documented development-only JWT fallback. For Render, set
+`ENVIRONMENT=production` and provide a strong, unique `JWT_SECRET`; the
+backend fails at startup if the secret is missing or still equals the
+development fallback. Also set `DATABASE_URL`, `AI_ENGINE_URL`,
+`CORS_ORIGINS`, and `PUBLIC_BASE_URL` in the Render service environment.
+`CORS_ORIGINS` accepts multiple origins separated by commas.
+
+`DATABASE_URL` is configurable for deployment preparation; the PostgreSQL
+migration and corresponding driver setup are handled separately.
+
+QR images currently use local filesystem persistence. Render deployment
+storage persistence is a later deployment consideration and will be addressed
+in a subsequent deployment step.
+
+### Frontend variable
+
+| Variable | Local development value | Purpose |
+| --- | --- | --- |
+| `VITE_API_URL` | `http://127.0.0.1:8000` | Backend base URL used by Axios |
+
+Vite reads `VITE_API_URL` at build time. Set it to the deployed backend URL
+when building the frontend for Render. Do not put a production URL in source
+code.
+
+### Health endpoints
+
+The backend and AI engine each expose an unauthenticated health endpoint:
+
+```text
+GET /health
+```
+
+The response is:
+
+```json
+{"status": "ok"}
+```
+
+These endpoints do not require JWT authentication.
+
 ## Local development
 
 ### Prerequisites

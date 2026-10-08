@@ -17,13 +17,13 @@ from database import SessionLocal
 
 from models import User
 
+from config import JWT_SECRET
+
 
 
 # -----------------------
 # JWT CONFIG
 # -----------------------
-
-SECRET_KEY = "dynamic_qr_ai_secret_key"
 
 ALGORITHM = "HS256"
 
@@ -79,7 +79,7 @@ def create_token(data: dict):
 
         data,
 
-        SECRET_KEY,
+        JWT_SECRET,
 
         algorithm=ALGORITHM
     )
@@ -135,7 +135,7 @@ def get_current_user(
 
             token,
 
-            SECRET_KEY,
+            JWT_SECRET,
 
             algorithms=[
                 ALGORITHM
@@ -215,7 +215,7 @@ def get_optional_current_user(
     try:
         payload = jwt.decode(
             token,
-            SECRET_KEY,
+            JWT_SECRET,
             algorithms=[ALGORITHM]
         )
         email = payload.get("email")

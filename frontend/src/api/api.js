@@ -1,9 +1,10 @@
 import axios from "axios";
 
 const TOKEN_KEY = "dynamic_qr_token";
+const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 const api = axios.create({
-  baseURL: "http://127.0.0.1:8000",
+  baseURL: API_URL,
 });
 
 export const getToken = () => localStorage.getItem(TOKEN_KEY);
