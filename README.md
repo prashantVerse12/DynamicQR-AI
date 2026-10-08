@@ -23,7 +23,7 @@ vision.
 ### Implemented
 
 - Dynamic QR generation with stable eight-character QR IDs.
-- QR image generation and local image serving.
+- QR image generation on demand through the backend.
 - Public QR resolution at `GET /q/{qr_id}`.
 - URL, TEXT, and FORM content versions in the backend.
 - URL redirects, plain-text responses, and safe display-only form responses.
@@ -60,7 +60,7 @@ The following are not implemented in the current repository:
 - Version history and rollback UI.
 - Scheduled publishing and expiration.
 - Production secrets management, HTTPS deployment, and cloud infrastructure.
-- PostgreSQL, migrations, containerization, and production observability.
+- Containerization and production observability.
 - Rate limiting, CAPTCHA, multi-tenancy, billing, and administrative tooling.
 - Advanced URL reputation and ML-based classification.
 - Additional content types such as image, poster, PDF, and video.
@@ -381,12 +381,22 @@ development fallback. Also set `DATABASE_URL`, `AI_ENGINE_URL`,
 `CORS_ORIGINS`, and `PUBLIC_BASE_URL` in the Render service environment.
 `CORS_ORIGINS` accepts multiple origins separated by commas.
 
-`DATABASE_URL` is configurable for deployment preparation; the PostgreSQL
-migration and corresponding driver setup are handled separately.
+`DATABASE_URL` is configurable for deployment. The backend includes Alembic
+migrations and the PostgreSQL driver; run migrations before starting a
+production instance:
 
-QR images currently use local filesystem persistence. Render deployment
-storage persistence is a later deployment consideration and will be addressed
-in a subsequent deployment step.
+```powershell
+cd backend
+.\venv\Scripts\alembic.exe upgrade head
+```
+
+Development keeps the existing SQLite `create_all()` and legacy URL backfill
+convenience. Production does not run `create_all()` or automatic backfill at
+startup.
+
+QR image responses use the existing `/qr-images/{qr_id}.png` URL, but the PNG
+is generated on demand instead of being persisted to the local filesystem.
+This avoids relying on Render's ephemeral service filesystem.
 
 ### Frontend variable
 
@@ -459,8 +469,8 @@ cd backend
 .\venv\Scripts\python.exe -m uvicorn main:app --reload --port 8000
 ```
 
-The backend creates or opens `backend/qr_codes.db` and serves generated QR
-images from its working directory.
+The backend creates or opens `backend/qr_codes.db`. QR images are generated
+on demand by the backend, so local image files are not required.
 
 ### Start the frontend
 

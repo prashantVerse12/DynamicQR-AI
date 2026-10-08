@@ -5,9 +5,8 @@ from fastapi import (
 )
 
 from fastapi.responses import RedirectResponse
-from fastapi.responses import HTMLResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 from sqlalchemy.orm import Session
 
@@ -16,6 +15,7 @@ import qrcode
 import requests
 import html
 import json
+from io import BytesIO
 
 
 from database import (
@@ -55,15 +55,15 @@ from auth import (
     get_optional_current_user
 )
 from config import AI_ENGINE_URL, CORS_ORIGINS, PUBLIC_BASE_URL
+from config import ENVIRONMENT
 
 
 # -------------------------
 # DATABASE
 # -------------------------
 
-Base.metadata.create_all(
-    bind=engine
-)
+if ENVIRONMENT == "development":
+    Base.metadata.create_all(bind=engine)
 
 
 app = FastAPI(
@@ -94,24 +94,6 @@ app.add_middleware(
 
 
 # -------------------------
-# QR IMAGE SERVER
-# -------------------------
-
-app.mount(
-
-    "/qr-images",
-
-    StaticFiles(
-        directory="."
-    ),
-
-    name="qr-images"
-
-)
-
-
-
-# -------------------------
 # DB SESSION
 # -------------------------
 
@@ -134,7 +116,8 @@ def migrate_legacy_content():
         db.close()
 
 
-migrate_legacy_content()
+if ENVIRONMENT == "development":
+    migrate_legacy_content()
 
 
 
@@ -282,6 +265,25 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/qr-images/{qr_id}.png")
+def qr_image(
+    qr_id: str,
+    db: Session = Depends(get_db),
+):
+    qr = (
+        db.query(QRCode)
+        .filter(QRCode.qr_id == qr_id)
+        .first()
+    )
+    if not qr:
+        raise HTTPException(status_code=404, detail="QR not found")
+
+    image = qrcode.make(f"{PUBLIC_BASE_URL}/q/{qr.qr_id}")
+    image_buffer = BytesIO()
+    image.save(image_buffer, format="PNG")
+    return Response(content=image_buffer.getvalue(), media_type="image/png")
+
+
 
 
 
@@ -387,20 +389,6 @@ def create_qr(
     qr_link = (
 
         f"{PUBLIC_BASE_URL}/q/{qr_id}"
-
-    )
-
-
-
-    img = qrcode.make(
-        qr_link
-    )
-
-
-
-    img.save(
-
-        f"{qr_id}.png"
 
     )
 

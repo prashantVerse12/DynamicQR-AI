@@ -5,7 +5,8 @@ from sqlalchemy import (
     Boolean,
     ForeignKey,
     DateTime,
-    func
+    func,
+    UniqueConstraint,
 )
 
 from sqlalchemy.orm import relationship
@@ -134,6 +135,9 @@ class QRCode(Base):
 class ContentVersion(Base):
 
     __tablename__ = "content_versions"
+    __table_args__ = (
+        UniqueConstraint("qr_code_id", "version", name="uq_content_versions_qr_version"),
+    )
 
     id = Column(
         Integer,
